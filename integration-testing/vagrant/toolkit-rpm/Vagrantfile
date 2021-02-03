@@ -12,6 +12,11 @@ unless Vagrant.has_plugin?("vagrant-disksize")
     raise  Vagrant::Errors::VagrantError.new, "vagrant-disksize plugin is missing. Please install it using 'vagrant plugin install vagrant-disksize' and rerun 'vagrant up'"
 end
 
+# Install vagrant-destroy-provisioner to allow destroying the vagrant box as a provision command.
+unless Vagrant.has_plugin?("vagrant-destroy-provisioner")
+    raise  Vagrant::Errors::VagrantError.new, "vagrant-destroy-provisioner plugin is missing. Please install it using 'vagrant plugin install vagrant-destroy-provisioner' and rerun 'vagrant up'"
+    end
+
 # All Vagrant configuration is done below. The "2" in Vagrant.configure
 # configures the configuration version (we support older styles for
 # backwards compatibility). Please don't change it unless you know what
@@ -26,7 +31,6 @@ Vagrant.configure("2") do |config|
   #config.vm.box = "generic/centos7"
   config.vm.box = "centos/7"
   config.disksize.size = '20GB'
-  config.vm.hostname= "toolkit-rpm1"
 
   if Vagrant.has_plugin?("vagrant-vbguest")
     config.vbguest.auto_update = false
@@ -57,7 +61,6 @@ Vagrant.configure("2") do |config|
   # Bridged networks make the machine appear as another physical device on
   # your network.
   #config.vm.network "public_network", bridge: "en0: Wi-Fi (Wireless)"
-  config.vm.network "public_network", bridge: "en0: Wi-Fi (Wireless)"
 
   # Share an additional folder to the guest VM. The first argument is
   # the path on the host to the actual folder. The second argument is
@@ -78,67 +81,16 @@ Vagrant.configure("2") do |config|
      vb.memory = "4096"
      vb.cpus = 4
      vb.customize ["modifyvm", :id, "--audio", "none"]
+
+  ["perfsonar-psconfig-web-admin-ui","perfsonar-psconfig-web-admin-publisher","perfsonar-tools","perfsonar-core","perfsonar-testpoint","perfsonar-centralmanagement","perfsonar-toolkit"].each do |b|
+    config.vm.define "node-%s" % b do |node|
+
+      node.vm.hostname= "node-%s" % b
+
+      node.vm.provision "shell", inline: "/vagrant/ps_install_bundle.sh %s" % b
+      node.vm.provision "destroy", destroy: true
+    end
   end
-  #
-  # View the documentation for the provider you are using for more
-  # information on available options.
-
-  # Enable provisioning with a shell script. Additional provisioners such as
-  # Ansible, Chef, Docker, Puppet and Salt are also available. Please see the
-  # documentation for more information about their specific syntax and use.
-     #apt-get install -y apache2
- 
-        YUMMY="yum -y"
-  config.vm.provision "shell", inline: <<-SHELL
-        set -e
-
-        if [ ! -e "/etc/redhat-release" ]
-        then
-          echo "Only CentOS is supported at this time." 1>&2
-          exit 1
-        fi
-	 #Disable selinux
-        sed -i s/SELINUX=enforcing/SELINUX=permissive/g /etc/selinux/config
-
-    #reload VM since selinux requires reboot. Requires `vagrant plugin install vagrant-reload
-    ip route add blackhole 198.128.151.17/32
-    ip -6 route add blackhole 2001:400:210:151::11/64
-
-    yum update -y
-	yum -y install epel-release
-	# tools for convenience
-	yum -y install vim bind-tools 
-    # install perfsonar repo(s) and Toolkit
-	yum install -y #{perfsonar_repo}
-	yum install -y perfSONAR-repo-nightly-minor
-	yum install -y perfsonar-toolkit 
-	#yum install -y perfsonar-psconfig-web-admin-ui perfsonar-psconfig-web-admin-publisher
-
-    # disable some services to test without (TODO: TEMPORARY)
-    #systemctl stop perfsonar-lsregistrationdaemon
-    #systemctl disable perfsonar-lsregistrationdaemon
-    #systemctl stop perfsonar-lscachedaemon
-    #systemctl disable perfsonar-lscachedaemon
-    #systemctl stop perfsonar-configdaemon
-    #systemctl disable perfsonar-configdaemon
-
-    ## move convenience
-    #systemctl enable httpd
-    #systemctl start httpd
-
-  SHELL
-  config.vm.provision "toolkit", type:"shell", run: "always", inline: <<-SHELL
-        # TODO: TEMPORARY
-        # Blackhole ps1.es.net for testing purposes
-        ip route add blackhole 198.128.151.17/32
-        ip route add blackhole 2001:400:210:151::11/64
-        # Blackhole perfsonar.net for testing purposes (ls hints)
-        ip route add blackhole 185.199.108.153/24
-        ip route add blackhole 185.199.109.153/24
-        ip route add blackhole 185.199.110.153/24
-        ip route add blackhole 185.199.111.153/24
-  SHELL
-  config.vm.provision :reload
 end
 
 # repos
